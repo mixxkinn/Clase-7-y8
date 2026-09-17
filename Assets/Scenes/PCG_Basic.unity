@@ -473,8 +473,8 @@ MonoBehaviour:
   cellSize: 2
   wallProbability: 0.22
   rewardCount: 5
-  seed: 12345
-  dangerCount: 0
+  seed: 54321
+  dangerCount: 4
   floorPrefab: {fileID: 1715473632942968133, guid: 5cd433e281ec88043a71085a4125403c, type: 3}
   wallPrefab: {fileID: 2250869836403257500, guid: d79c1c118bae6c54bb00cc612e9b161c, type: 3}
   startPrefab: {fileID: 2562763537617174943, guid: d6ef2c3a2ae3c684dbef3571343a5337, type: 3}

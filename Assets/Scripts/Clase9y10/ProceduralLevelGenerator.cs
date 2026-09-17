@@ -17,17 +17,34 @@ public class ProceduralLevelGenerator : MonoBehaviour
     public int rewardCount = 5;
  
     public int seed = 12345;
- 
+
+    // ---- MODIFICACION: zonas de riesgo ----
+    [Header("Zonas de riesgo (modificacion)")]
+    [Min(0)]
+    public int dangerCount = 4;
+    // ------------------------------------------------
+
     [Header("Prefabs")]
     public GameObject floorPrefab;
     public GameObject wallPrefab;
     public GameObject startPrefab;
     public GameObject goalPrefab;
     public GameObject rewardPrefab;
- 
+
+    // ---- MODIFICACION ----
+    [Header("Prefab de riesgo (modificacion)")]
+    public GameObject dangerPrefab;
+    // -------------------------------
+
+   
+
     // 0 = transitable, 1 = muro
     private int[,] map;
- 
+
+    // Se usan para NO colocar zonas de riesgo encima de la ruta.
+    private readonly HashSet<Vector2Int> guaranteedPath =
+        new HashSet<Vector2Int>();
+
     // Conservamos referencias para poder limpiar una generacion anterior.
     private readonly List<GameObject> generatedObjects =
         new List<GameObject>();
@@ -103,9 +120,23 @@ public class ProceduralLevelGenerator : MonoBehaviour
             "Goal"
         );
  
-        // PASO 4: contenido adicional.
-        int spawnedRewards = SpawnRewards(start, goal);
- 
+     
+       
+
+        // PASO 4: contenido adicional se agrego una lista .
+        List<Vector2Int> rewardPositions;
+
+        int spawnedRewards = SpawnRewards(start, goal, out rewardPositions);
+
+        // ---- MODIFICACION PROPIA: colocar zonas de riesgo ----
+        // Regla nueva: solo en celdas transitables que NO son
+        // parte del corredor garantizado, ni S/G, ni ya tienen reliquia.
+        int spawnedDangers = SpawnDangerZones(
+            start, goal, rewardPositions
+        );
+        // --------------------------------------------------------
+
+
         string mission =
             "Llega a la meta y recolecta " +
             spawnedRewards +
@@ -164,7 +195,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
  
     private int SpawnRewards(
         Vector2Int start,
-        Vector2Int goal)
+        Vector2Int goal, out List<Vector2Int> placedPositions)
     {
         List<Vector2Int> candidates =
             new List<Vector2Int>();
@@ -196,19 +227,73 @@ public class ProceduralLevelGenerator : MonoBehaviour
  
         int amount =
             Mathf.Min(rewardCount, candidates.Count);
- 
+        placedPositions = new List<Vector2Int>();
+
         for (int i = 0; i < amount; i++)
         {
-            Spawn(
-                rewardPrefab,
-                CellToWorld(candidates[i], 0.5f),
-                "Reward_" + i
-            );
+            Spawn(rewardPrefab, CellToWorld(candidates[i], 0.5f), "Reward_" + i);
+            placedPositions.Add(candidates[i]);
         }
  
         return amount;
     }
- 
+
+    // ---- MODIFICACION ----
+    // Coloca sonas de riesgo :
+    // transitables, fuera del corredor garantizado, sin pisar
+    // S, G ni celdas que ya tienen una reliquia.
+    private int SpawnDangerZones(
+        Vector2Int start,
+        Vector2Int goal,
+        List<Vector2Int> rewardPositions)
+    {
+
+
+        if (dangerPrefab == null || dangerCount <= 0)
+            return 0;
+
+        HashSet<Vector2Int> occupied = new HashSet<Vector2Int>(rewardPositions);
+
+        List<Vector2Int> candidates = new List<Vector2Int>();
+
+        for (int x = 1; x < width - 1; x++)
+        {
+            for (int y = 1; y < height - 1; y++)
+            {
+                Vector2Int cell = new Vector2Int(x, y);
+
+                bool isTransitable = map[x, y] == 0;
+                bool isOnPath = guaranteedPath.Contains(cell);
+                bool isProtected = cell == start || cell == goal;
+                bool isOccupied = occupied.Contains(cell);
+
+                if (isTransitable && !isOnPath && !isProtected && !isOccupied)
+                {
+                    candidates.Add(cell);
+                }
+            }
+        }
+
+        // Misma tecnica de mezcla reproducible (Fisher-Yates).
+        for (int i = candidates.Count - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            Vector2Int temp = candidates[i];
+            candidates[i] = candidates[j];
+            candidates[j] = temp;
+        }
+
+        int amount = Mathf.Min(dangerCount, candidates.Count);
+
+        for (int i = 0; i < amount; i++)
+        {
+            Spawn(dangerPrefab, CellToWorld(candidates[i], 0.5f), "Danger_" + i);
+        }
+
+        return amount;
+    }
+    // --------------------------------
+
     private Vector3 CellToWorld(
         Vector2Int cell,
         float yPosition)
@@ -278,7 +363,13 @@ public class ProceduralLevelGenerator : MonoBehaviour
             );
             return false;
         }
- 
+        // ---- MODIFICACION PROPIA ----
+        if (dangerCount > 0 && dangerPrefab == null)
+        {
+            Debug.LogError("Danger Prefab es obligatorio cuando dangerCount > 0.");
+            return false;
+        }
+        // --------------------------------
         return true;
     }
 }
